@@ -44,7 +44,6 @@ int main(void)
 {
 	SetupHardware();
 
-	LEDs_SetAllLEDs(LEDMASK_USB_NOTREADY);
 	GlobalInterruptEnable();
 
 	for (;;)
@@ -77,7 +76,6 @@ void SetupHardware(void)
 #endif
 
 	/* Hardware Initialization */
-	LEDs_Init();
 	USB_Init();
 }
 
@@ -166,22 +164,6 @@ void ProcessGenericHIDReport(uint8_t* DataArray)
 		function is called each time the host has sent a new report. DataArray is an array
 		holding the report sent from the host.
 	*/
-
-	uint8_t NewLEDMask = LEDS_NO_LEDS;
-
-	if (DataArray[0])
-	  NewLEDMask |= LEDS_LED1;
-
-	if (DataArray[1])
-	  NewLEDMask |= LEDS_LED2;
-
-	if (DataArray[2])
-	  NewLEDMask |= LEDS_LED3;
-
-	if (DataArray[3])
-	  NewLEDMask |= LEDS_LED4;
-
-	LEDs_SetAllLEDs(NewLEDMask);
 }
 
 /** Function to create the next report to send back to the host at the next reporting interval.
@@ -195,13 +177,6 @@ void CreateGenericHIDReport(uint8_t* DataArray)
 		function is called each time the host is ready to accept a new report. DataArray is
 		an array to hold the report to the host.
 	*/
-
-	uint8_t CurrLEDMask = LEDs_GetLEDs();
-
-	DataArray[0] = ((CurrLEDMask & LEDS_LED1) ? 1 : 0);
-	DataArray[1] = ((CurrLEDMask & LEDS_LED2) ? 1 : 0);
-	DataArray[2] = ((CurrLEDMask & LEDS_LED3) ? 1 : 0);
-	DataArray[3] = ((CurrLEDMask & LEDS_LED4) ? 1 : 0);
 }
 
 void HID_Task(void)
