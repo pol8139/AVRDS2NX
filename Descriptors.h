@@ -77,6 +77,7 @@
 			STRING_ID_Language     = 0, /**< Supported Languages string descriptor ID (must be zero) */
 			STRING_ID_Manufacturer = 1, /**< Manufacturer string ID */
 			STRING_ID_Product      = 2, /**< Product string ID */
+			STRING_ID_Serial       = 3, /**< Serial string ID */
 		};
 
 	/* Macros: */
@@ -84,10 +85,10 @@
 		#define GENERIC_IN_EPADDR         (ENDPOINT_DIR_IN  | 1)
 
 		/** Endpoint address of the Generic HID reporting OUT endpoint. */
-		#define GENERIC_OUT_EPADDR        (ENDPOINT_DIR_OUT | 2)
+		#define GENERIC_OUT_EPADDR        (ENDPOINT_DIR_OUT | 1)
 
 		/** Size in bytes of the Generic HID reporting endpoint. */
-		#define GENERIC_EPSIZE            8
+		#define GENERIC_EPSIZE            0x0040
 
 	/* Function Prototypes: */
 		uint16_t CALLBACK_USB_GetDescriptor(const uint16_t wValue,
