@@ -85,7 +85,6 @@ void SetupHardware(void)
 void EVENT_USB_Device_Connect(void)
 {
 	/* Indicate USB enumerating */
-	LEDs_SetAllLEDs(LEDMASK_USB_ENUMERATING);
 }
 
 /** Event handler for the USB_Disconnect event. This indicates that the device is no longer connected to a host via
@@ -94,7 +93,6 @@ void EVENT_USB_Device_Connect(void)
 void EVENT_USB_Device_Disconnect(void)
 {
 	/* Indicate USB not ready */
-	LEDs_SetAllLEDs(LEDMASK_USB_NOTREADY);
 }
 
 /** Event handler for the USB_ConfigurationChanged event. This is fired when the host sets the current configuration
@@ -109,7 +107,6 @@ void EVENT_USB_Device_ConfigurationChanged(void)
 	ConfigSuccess &= Endpoint_ConfigureEndpoint(GENERIC_OUT_EPADDR, EP_TYPE_INTERRUPT, GENERIC_EPSIZE, 1);
 
 	/* Indicate endpoint configuration success or failure */
-	LEDs_SetAllLEDs(ConfigSuccess ? LEDMASK_USB_READY : LEDMASK_USB_ERROR);
 }
 
 /** Event handler for the USB_ControlRequest event. This is used to catch and process control requests sent to
