@@ -34,13 +34,15 @@
  *  is responsible for the initial application hardware configuration.
  */
 
-#include <stdio.h>
+// #include <stdio.h>
 #include "GenericHID.h"
 #include "mega32u4_dualshock2/mega32u4_uart.h"
 
 typedef enum
 {
 	NothingToDo,
+	FirstMagicPacket,
+	SecondMagicPacket,
 	RequestMacAddress,
 	Handshake,
 	EnableUSBHIDJoystickReport,
@@ -110,6 +112,21 @@ void SPI_Response(uint8_t* DataArray, uint8_t* Addr, int SizeofAddr, uint8_t* Da
 		Buff[i + sizeof(Addr) + 3] = Data[i];
 	}
 	UART_Response(DataArray, 0x90, 0x10, Buff, sizeof(Buff));
+}
+
+char SingleHex2Char(uint8_t in)
+{
+	if(in < 10) {
+		return in + 48;
+	} else {
+		return in + 55;
+	}
+}
+
+void ByteHexDump(char* out, uint8_t in)
+{
+	out[0] = SingleHex2Char(in >> 4);
+	out[1] = SingleHex2Char(in & 0x0F);
 }
 
 /** Main program entry point. This routine configures the hardware required by the application, then
@@ -285,9 +302,11 @@ void ProcessGenericHIDReport(uint8_t* DataArray)
 			}
 		}
 	}
+
 	transmitUartString(">>> ");
 	for(int i = 0; i < GENERIC_REPORT_SIZE; i++) {
-		sprintf(buffer + i * 2, "%02x", DataArray[i]);
+		// sprintf(buffer + i * 2, "%02x", DataArray[i]);
+		ByteHexDump(buffer + i * 2, DataArray[i]);
 	}
 	transmitUartString(buffer);
 }
@@ -303,6 +322,7 @@ void CreateGenericHIDReport(uint8_t* DataArray)
 		function is called each time the host is ready to accept a new report. DataArray is
 		an array to hold the report to the host.
 	*/
+	uint8_t sm[] = {0x00, 0x03};
 	uint8_t mc[] = {0x00, 0x03, 0x1f, 0x86, 0x1d, 0xd6, 0x03, 0x04}; // '0003' + mac_addr
 	// uint8_t hs[] = {0x81, 0x82};
 	uint8_t bt[] = {0x03};
@@ -317,8 +337,23 @@ void CreateGenericHIDReport(uint8_t* DataArray)
 	uint8_t ms[] = {0xbe, 0xff, 0x3e, 0x00, 0xf0, 0x01, 0x00, 0x40, 0x00, 0x40, 0x00, 0x40, 0xfe, 0xff, 0xfe, 0xff, 0x08, 0x00, 0xe7, 0x3b, 0xe7, 0x3b, 0xe7, 0x3b};
 	uint8_t Temp[GENERIC_REPORT_SIZE] = {};
 
+	static uint8_t FirstTime = 0;
+	if(FirstTime == 0){
+		FirstTime = 1;
+		ProControllerCommand = FirstMagicPacket;
+	} else if(FirstTime == 1){
+		FirstTime = 2;
+		ProControllerCommand = SecondMagicPacket;
+	} //これ別のところに異動?
+
 	switch(ProControllerCommand)
 	{
+	case FirstMagicPacket:
+		Response(DataArray, 0x81, 0x03, Temp, 0);
+		break;
+	case SecondMagicPacket:
+		// Response(DataArray, 0x81, 0x01, sm, 0);
+		// break;
 	case RequestMacAddress:
 		// memcpy(DataArray, mac, sizeof(mac));
 		Response(DataArray, 0x81, 0x01, mc, sizeof(mc));
@@ -381,10 +416,12 @@ void CreateGenericHIDReport(uint8_t* DataArray)
 	}
 	// DataArray[GENERIC_REPORT_SIZE - 1] = 0x34;
 	// DataArray[GENERIC_REPORT_SIZE - 2] = 0x12;
+
 	transmitUartString("<<< ");
 	if(DataArray[0] != 0x00) {
 		for(int i = 0; i < GENERIC_REPORT_SIZE; i++) {
-			sprintf(buffer + i * 2, "%02x", DataArray[i]);
+			// sprintf(buffer + i * 2, "%02x", DataArray[i]);
+			ByteHexDump(buffer + i * 2, DataArray[i]);
 		}
 		transmitUartString(buffer);
 	}
