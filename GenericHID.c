@@ -144,7 +144,7 @@ int main(void)
 	{
 		HID_Task();
 		USB_USBTask();
-		GlobalCounter += 8;
+		// GlobalCounter += 8;
 	}
 }
 
@@ -196,13 +196,24 @@ void EVENT_USB_Device_Disconnect(void)
  */
 void EVENT_USB_Device_ConfigurationChanged(void)
 {
+	transmitUartString("EVENT_USB_Device_ConfigurationChanged");
 	bool ConfigSuccess = true;
 
 	/* Setup HID Report Endpoints */
 	ConfigSuccess &= Endpoint_ConfigureEndpoint(GENERIC_IN_EPADDR, EP_TYPE_INTERRUPT, GENERIC_EPSIZE, 1);
+	if(ConfigSuccess) {
+		transmitUartString(" Success");
+	} else {
+		transmitUartString(" Failure");
+	}
 	ConfigSuccess &= Endpoint_ConfigureEndpoint(GENERIC_OUT_EPADDR, EP_TYPE_INTERRUPT, GENERIC_EPSIZE, 1);
 
 	/* Indicate endpoint configuration success or failure */
+	if(ConfigSuccess) {
+		transmitUartStringCRLF(" Success");
+	} else {
+		transmitUartStringCRLF(" Failure");
+	}
 }
 
 /** Event handler for the USB_ControlRequest event. This is used to catch and process control requests sent to
@@ -211,6 +222,11 @@ void EVENT_USB_Device_ConfigurationChanged(void)
  */
 void EVENT_USB_Device_ControlRequest(void)
 {
+	transmitUartString("EVENT_USB_Device_ControlRequest ");
+	ByteHexDump(buffer, USB_ControlRequest.bRequest);
+	ByteHexDump(buffer + 2, USB_ControlRequest.bmRequestType);
+	buffer[4] = '\0';
+	transmitUartStringCRLF(buffer);
 	/* Handle HID Class specific requests */
 	switch (USB_ControlRequest.bRequest)
 	{
@@ -303,12 +319,14 @@ void ProcessGenericHIDReport(uint8_t* DataArray)
 		}
 	}
 
-	transmitUartString(">>> ");
-	for(int i = 0; i < GENERIC_REPORT_SIZE; i++) {
-		// sprintf(buffer + i * 2, "%02x", DataArray[i]);
-		ByteHexDump(buffer + i * 2, DataArray[i]);
+	if(DataArray[0] != 0x00) {
+		transmitUartString(">>> ");
+		for(int i = 0; i < GENERIC_REPORT_SIZE; i++) {
+			// sprintf(buffer + i * 2, "%02x", DataArray[i]);
+			ByteHexDump(buffer + i * 2, DataArray[i]);
+		}
+		transmitUartStringCRLF(buffer);
 	}
-	transmitUartString(buffer);
 }
 
 /** Function to create the next report to send back to the host at the next reporting interval.
@@ -344,7 +362,9 @@ void CreateGenericHIDReport(uint8_t* DataArray)
 	} else if(FirstTime == 1){
 		FirstTime = 2;
 		ProControllerCommand = SecondMagicPacket;
-	} //これ別のところに異動?
+	}
+
+	GlobalCounter += 8;
 
 	switch(ProControllerCommand)
 	{
@@ -401,29 +421,29 @@ void CreateGenericHIDReport(uint8_t* DataArray)
 	case SPI_User6AxisMotionSensorCalibration:
 		SPI_Response(DataArray, ResponseSPI, sizeof(ResponseSPI), ms, sizeof(ms));
 		break;
-	// case PadData:
+	case PadData:
 	// default:
-	// 	if(JoystickReport) {
-	// 		memcpy(Temp, InitialInput, sizeof(InitialInput));
-	// 		if(GlobalCounter >> 7) {
-	// 			Temp[1] = (1 << 3);
-	// 		}
-	// 		Response(DataArray, 0x30, GlobalCounter, Temp, sizeof(InitialInput));
-	// 	}
-	// break;
+		if(JoystickReport) {
+			memcpy(Temp, InitialInput, sizeof(InitialInput));
+			if(GlobalCounter >> 7) {
+				Temp[1] = (1 << 3);
+			}
+			Response(DataArray, 0x30, GlobalCounter, Temp, sizeof(InitialInput));
+		}
+	break;
 	default:
 		break;
 	}
 	// DataArray[GENERIC_REPORT_SIZE - 1] = 0x34;
 	// DataArray[GENERIC_REPORT_SIZE - 2] = 0x12;
 
-	transmitUartString("<<< ");
 	if(DataArray[0] != 0x00) {
+		transmitUartString("<<< ");
 		for(int i = 0; i < GENERIC_REPORT_SIZE; i++) {
 			// sprintf(buffer + i * 2, "%02x", DataArray[i]);
 			ByteHexDump(buffer + i * 2, DataArray[i]);
 		}
-		transmitUartString(buffer);
+		transmitUartStringCRLF(buffer);
 	}
 }
 
@@ -436,11 +456,11 @@ void HID_Task(void)
 	ProControllerCommand = PadData;
 
 	Endpoint_SelectEndpoint(GENERIC_OUT_EPADDR);
-	if(GlobalCounter == 0) transmitUart('.');
+	// if(GlobalCounter == 0) transmitUart('.');
 	/* Check to see if a packet has been sent from the host */
 	if (Endpoint_IsOUTReceived())
 	{
-		transmitUartStringCRLF("O");
+		// transmitUartStringCRLF("O");
 		/* Check to see if the packet contains data */
 		if (Endpoint_IsReadWriteAllowed())
 		{
@@ -452,7 +472,6 @@ void HID_Task(void)
 
 			/* Process Generic Report Data */
 			ProcessGenericHIDReport(GenericData);
-			transmitUartStringCRLF("");
 		}
 
 		/* Finalize the stream transfer to send the last packet */
@@ -464,13 +483,12 @@ void HID_Task(void)
 	/* Check to see if the host is ready to accept another packet */
 	if (Endpoint_IsINReady())
 	{
-		transmitUartStringCRLF("I");
+		// transmitUartStringCRLF("I");
 		/* Create a temporary buffer to hold the report to send to the host */
 		uint8_t GenericData[GENERIC_REPORT_SIZE] = {};
 
 		/* Create Generic Report Data */
 		CreateGenericHIDReport(GenericData);
-		transmitUartStringCRLF("");
 
 		// if(ProControllerCommand != NothingToDo) {
 			/* Write Generic Report Data */

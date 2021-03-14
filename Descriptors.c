@@ -36,6 +36,7 @@
  */
 
 #include "Descriptors.h"
+#include "mega32u4_dualshock2/mega32u4_uart.h"
 
 /** HID class report descriptor. This is a special descriptor constructed with values from the
  *  USBIF HID class specification to describe the reports and capabilities of the HID device. This
@@ -187,6 +188,7 @@ uint16_t CALLBACK_USB_GetDescriptor(const uint16_t wValue,
                                     const uint16_t wIndex,
                                     const void** const DescriptorAddress)
 {
+	transmitUartStringCRLF("CALLBACK_USB_GetDescriptor");
 	const uint8_t  DescriptorType   = (wValue >> 8);
 	const uint8_t  DescriptorNumber = (wValue & 0xFF);
 
