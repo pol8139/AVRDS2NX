@@ -66,7 +66,7 @@ uint8_t ResponseUART;
 uint8_t ResponseSPI[2];
 bool JoystickReport = false;
 // uint8_t MACAddr[] = {0x00, 0x00, 0x5e, 0x00, 0x53, 0x5e};
-uint8_t InitialInput[] = {0x81, 0x00, 0x80, 0x00, 0xf8, 0xd7, 0x7a, 0x22, 0xc8, 0x7b, 0x0c};
+uint8_t InitialInput[] = {0x81, 0x00, 0x80, 0x00, 0xf8, 0xd7, 0x7a, 0x22, 0xc8, 0x7b, 0x00};
 uint16_t GlobalCounter = 0;
 #define BUFFERSIZE GENERIC_REPORT_SIZE * 2
 char buffer[BUFFERSIZE + 1]; // \0
@@ -76,6 +76,9 @@ void Response(uint8_t* DataArray, uint8_t Code, uint8_t Cmd, uint8_t* Data, int 
 	DataArray[0] = Code;
 	DataArray[1] = Cmd;
 	for(int i = 0; i < SizeofData; i++) {
+		if(i + 2 >= GENERIC_REPORT_SIZE) {
+			break;
+		}
 		DataArray[i + 2] = Data[i];
 	}
 	// for(int i = 0; i < GENERIC_REPORT_SIZE - 2 - SizeofData; i++) {
@@ -85,7 +88,7 @@ void Response(uint8_t* DataArray, uint8_t Code, uint8_t Cmd, uint8_t* Data, int 
 
 void UART_Response(uint8_t* DataArray, uint8_t Code, uint8_t Subcmd, uint8_t* Data, int SizeofData)
 {
-	// uint8_t Buff[GENERIC_REPORT_SIZE - 2] = {};
+	// uint8_t Buff[SizeofData + sizeof(InitialInput) + 1] = {};
 	uint8_t Buff[GENERIC_REPORT_SIZE] = {};
 	for(int i = 0; i < sizeof(InitialInput); i++) {
 		Buff[i] = InitialInput[i];
@@ -93,6 +96,9 @@ void UART_Response(uint8_t* DataArray, uint8_t Code, uint8_t Subcmd, uint8_t* Da
 	Buff[sizeof(InitialInput)] = Code;
 	Buff[sizeof(InitialInput) + 1] = Subcmd;
 	for(int i = 0; i < SizeofData; i++) {
+		if(i + sizeof(InitialInput) + 2 >= GENERIC_REPORT_SIZE) {
+			break;
+		}
 		Buff[i + sizeof(InitialInput) + 2] = Data[i];
 	}
 	Response(DataArray, 0x21, GlobalCounter, Buff, sizeof(Buff));
@@ -101,15 +107,15 @@ void UART_Response(uint8_t* DataArray, uint8_t Code, uint8_t Subcmd, uint8_t* Da
 void SPI_Response(uint8_t* DataArray, uint8_t* Addr, int SizeofAddr, uint8_t* Data, int SizeofData)
 {
 	uint8_t Buff[GENERIC_REPORT_SIZE] = {};
-	for(int i = 0; i < sizeof(Addr); i++) {
+	for(int i = 0; i < SizeofAddr; i++) {
 		Buff[i] = Addr[i];
 	}
-	Buff[sizeof(Addr)] = 0x00;
-	Buff[sizeof(Addr) + 1] = 0x00;
+	Buff[SizeofAddr] = 0x00;
+	Buff[SizeofAddr + 1] = 0x00;
 	// Buff[sizeof(Addr) + 2] = SizeofData;
-	Buff[sizeof(Addr) + 2] = SizeofData & 0xFF;
-	for(int i = 0; i < sizeof(Data); i++) {
-		Buff[i + sizeof(Addr) + 3] = Data[i];
+	Buff[SizeofAddr + 2] = SizeofData & 0xFF;
+	for(int i = 0; i < SizeofData; i++) {
+		Buff[i + SizeofAddr + 3] = Data[i];
 	}
 	UART_Response(DataArray, 0x90, 0x10, Buff, sizeof(Buff));
 }
@@ -372,8 +378,8 @@ void CreateGenericHIDReport(uint8_t* DataArray)
 		Response(DataArray, 0x81, 0x03, Temp, 0);
 		break;
 	case SecondMagicPacket:
-		// Response(DataArray, 0x81, 0x01, sm, 0);
-		// break;
+		Response(DataArray, 0x81, 0x01, sm, sizeof(sm));
+		break;
 	case RequestMacAddress:
 		// memcpy(DataArray, mac, sizeof(mac));
 		Response(DataArray, 0x81, 0x01, mc, sizeof(mc));
@@ -437,14 +443,15 @@ void CreateGenericHIDReport(uint8_t* DataArray)
 	// DataArray[GENERIC_REPORT_SIZE - 1] = 0x34;
 	// DataArray[GENERIC_REPORT_SIZE - 2] = 0x12;
 
+	transmitUartString("<<< ");
 	if(DataArray[0] != 0x00) {
-		transmitUartString("<<< ");
 		for(int i = 0; i < GENERIC_REPORT_SIZE; i++) {
 			// sprintf(buffer + i * 2, "%02x", DataArray[i]);
 			ByteHexDump(buffer + i * 2, DataArray[i]);
 		}
-		transmitUartStringCRLF(buffer);
+		transmitUartString(buffer);
 	}
+	transmitUartStringCRLF("");
 }
 
 void HID_Task(void)
