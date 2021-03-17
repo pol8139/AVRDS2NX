@@ -51,27 +51,59 @@ typedef enum
 	UART_Others,
 	UART_TriggerButtonsElapsedTime,
 	UART_SetNFCIRMCUConfiguration,
-	SPI_SerialNumber,
-	SPI_BodyRGBColor,
-	SPI_6AxisHorizontalOffsets,
-	SPI_FactoryStickDeviceParameters2,
-	SPI_FactoryConfigurationCalibration2,
-	SPI_UserAnalogSticksCalibration,
-	SPI_User6AxisMotionSensorCalibration,
+	SPI_ReadData,
 	PadData
 } CommandDescription_t;
 
 CommandDescription_t ProControllerCommand;
 uint8_t ResponseUART;
-uint8_t ResponseSPI[2];
+uint8_t ResponseSPI[5];
 bool JoystickReport = false;
 // uint8_t MACAddr[] = {0x00, 0x00, 0x5e, 0x00, 0x53, 0x5e};
-uint8_t InitialInput[] = {0x81, 0x00, 0x80, 0x00, 0xf8, 0xd7, 0x7a, 0x22, 0xc8, 0x7b, 0x00};
-uint16_t GlobalCounter = 0;
+const uint8_t InitialInput[] = {0x81, 0x00, 0x80, 0x00, 0xf8, 0xd7, 0x7a, 0x22, 0xc8, 0x7b, 0x00};
+uint8_t GlobalCounter = 0;
 #define BUFFERSIZE GENERIC_REPORT_SIZE * 2
 char buffer[BUFFERSIZE + 1]; // \0
 
-void Response(uint8_t* DataArray, uint8_t Code, uint8_t Cmd, uint8_t* Data, int SizeofData)
+PROGMEM const uint8_t SPIROM0x6000[] = 
+{
+	0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0xFF, 0xFF, 0x03, 0xA0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x01, 0xFF, 0xFF, 0xFF, 0xFF,
+	0x37, 0xFF, 0x42, 0xFF, 0x69, 0xFF, 0x00, 0x40, 0x00, 0x40, 0x00, 0x40, 0x2E, 0x00, 0xC1, 0xFF,
+	0xDF, 0xFF, 0x3B, 0x34, 0x3B, 0x34, 0x3B, 0x34, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x32, 0x65, 0x49,
+	0xDD, 0x37, 0x8E, 0x27, 0xA5, 0x46, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+	0x42, 0x87, 0xF5, 0x2B, 0x2B, 0x2B, 0xF3, 0xC2, 0x02, 0x32, 0x6D, 0xB3, 0xFF, 0xFF, 0xFF, 0xFF,
+	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+	0x5E, 0x01, 0x00, 0x00, 0xF1, 0x0F, 0x19, 0x00, 0x49, 0xBC, 0x40, 0xE1, 0xDA, 0xA2, 0x2D, 0xDA,
+	0xA2, 0x2D, 0xA6, 0x6A, 0xAA, 0x90, 0x04, 0x49, 0x19, 0x00, 0x49, 0xBC, 0x40, 0xE1, 0xDA, 0xA2,
+	0x2D, 0xDA, 0xA2, 0x2D, 0xA6, 0x6A, 0xAA, 0x90, 0x04, 0x49, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF
+};
+
+PROGMEM const uint8_t SPIROM0x8000[] = 
+{
+	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xB2, 0xA1, 0xCF, 0x00, 0xC8, 0xFF, 0x69, 0xFF, 0x00, 0x40,
+	0x00, 0x40, 0x00, 0x40, 0x3D, 0x00, 0xBD, 0xFF, 0xDA, 0xFF, 0x3B, 0x34, 0x3B, 0x34, 0x3B, 0x34
+};
+
+char SingleHex2Char(uint8_t in)
+{
+	if(in < 10) {
+		return in + 48;
+	} else {
+		return in + 55;
+	}
+}
+
+void ByteHexDump(char* out, uint8_t in)
+{
+	out[0] = SingleHex2Char(in >> 4);
+	out[1] = SingleHex2Char(in & 0x0F);
+}
+
+void Response(uint8_t* DataArray, uint8_t Code, uint8_t Cmd, const uint8_t* Data, int SizeofData)
 {
 	DataArray[0] = Code;
 	DataArray[1] = Cmd;
@@ -81,12 +113,9 @@ void Response(uint8_t* DataArray, uint8_t Code, uint8_t Cmd, uint8_t* Data, int 
 		}
 		DataArray[i + 2] = Data[i];
 	}
-	// for(int i = 0; i < GENERIC_REPORT_SIZE - 2 - SizeofData; i++) {
-	// 	DataArray[i + 2 + SizeofData] = 0;
-	// }
 }
 
-void UART_Response(uint8_t* DataArray, uint8_t Code, uint8_t Subcmd, uint8_t* Data, int SizeofData)
+void UART_Response(uint8_t* DataArray, uint8_t Code, uint8_t Subcmd, const uint8_t* Data, int SizeofData)
 {
 	// uint8_t Buff[SizeofData + sizeof(InitialInput) + 1] = {};
 	uint8_t Buff[GENERIC_REPORT_SIZE] = {};
@@ -104,35 +133,18 @@ void UART_Response(uint8_t* DataArray, uint8_t Code, uint8_t Subcmd, uint8_t* Da
 	Response(DataArray, 0x21, GlobalCounter, Buff, sizeof(Buff));
 }
 
-void SPI_Response(uint8_t* DataArray, uint8_t* Addr, int SizeofAddr, uint8_t* Data, int SizeofData)
+void SPI_Response(uint8_t* DataArray, uint8_t* Addr)
 {
 	uint8_t Buff[GENERIC_REPORT_SIZE] = {};
-	for(int i = 0; i < SizeofAddr; i++) {
-		Buff[i] = Addr[i];
+	const uint8_t* ROMAddr;
+	memcpy(Buff, Addr, sizeof(ResponseSPI));
+	if(Addr[1] == 0x60) {
+		ROMAddr = SPIROM0x6000;
+	} else/* if(Addr[1] == 0x80)*/ {
+		ROMAddr = SPIROM0x8000;
 	}
-	Buff[SizeofAddr] = 0x00;
-	Buff[SizeofAddr + 1] = 0x00;
-	// Buff[sizeof(Addr) + 2] = SizeofData;
-	Buff[SizeofAddr + 2] = SizeofData & 0xFF;
-	for(int i = 0; i < SizeofData; i++) {
-		Buff[i + SizeofAddr + 3] = Data[i];
-	}
-	UART_Response(DataArray, 0x90, 0x10, Buff, sizeof(Buff));
-}
-
-char SingleHex2Char(uint8_t in)
-{
-	if(in < 10) {
-		return in + 48;
-	} else {
-		return in + 55;
-	}
-}
-
-void ByteHexDump(char* out, uint8_t in)
-{
-	out[0] = SingleHex2Char(in >> 4);
-	out[1] = SingleHex2Char(in & 0x0F);
+	memcpy_P(&Buff[sizeof(ResponseSPI)], &ROMAddr[Addr[0]], Addr[4]);
+	UART_Response(DataArray, 0x90, 0x10, Buff, 2 + sizeof(ResponseSPI) + Addr[4]);
 }
 
 /** Main program entry point. This routine configures the hardware required by the application, then
@@ -292,7 +304,7 @@ void ProcessGenericHIDReport(uint8_t* DataArray)
 	} else if(DataArray[0] == 0x01) {
 		ResponseUART = DataArray[10];
 		if(DataArray[10] == 0x00) {
-			ProControllerCommand = NothingToDo;
+			ProControllerCommand = PadData;
 		} else if(DataArray[10] == 0x01) {
 			ProControllerCommand = UART_BluetoothManualPairing;
 		} else if(DataArray[10] == 0x02) {
@@ -305,33 +317,20 @@ void ProcessGenericHIDReport(uint8_t* DataArray)
 		} else if(DataArray[10] == 0x21) {
 			ProControllerCommand = UART_SetNFCIRMCUConfiguration;
 		} else if(DataArray[10] == 0x10) {
-			ResponseSPI[0] = DataArray[11];
-			ResponseSPI[1] = DataArray[12];
-			if(DataArray[11] == 0x00 && DataArray[12] == 0x60) {
-				ProControllerCommand = SPI_SerialNumber;
-			} else if(DataArray[11] == 0x50 && DataArray[12] == 0x60) {
-				ProControllerCommand = SPI_BodyRGBColor;
-			} else if(DataArray[11] == 0x80 && DataArray[12] == 0x60) {
-				ProControllerCommand = SPI_6AxisHorizontalOffsets;
-			} else if(DataArray[11] == 0x98 && DataArray[12] == 0x60) {
-				ProControllerCommand = SPI_FactoryStickDeviceParameters2;
-			} else if(DataArray[11] == 0x3d && DataArray[12] == 0x60) {
-				ProControllerCommand = SPI_FactoryConfigurationCalibration2;
-			} else if(DataArray[11] == 0x10 && DataArray[12] == 0x80) {
-				ProControllerCommand = SPI_UserAnalogSticksCalibration;
-			} else if(DataArray[11] == 0x28 && DataArray[12] == 0x80) {
-				ProControllerCommand = SPI_User6AxisMotionSensorCalibration;
-			}
+			memcpy(ResponseSPI, DataArray + 11, sizeof(ResponseSPI));
+			ProControllerCommand = SPI_ReadData;
 		}
 	}
-
-	if(DataArray[0] != 0x00) {
+	if(ProControllerCommand == NothingToDo) {
 		transmitUartString(">>> ");
-		for(int i = 0; i < GENERIC_REPORT_SIZE; i++) {
-			// sprintf(buffer + i * 2, "%02x", DataArray[i]);
-			ByteHexDump(buffer + i * 2, DataArray[i]);
+		if(DataArray[0] != 0x00) {
+			for(int i = 0; i < GENERIC_REPORT_SIZE; i++) {
+				// sprintf(buffer + i * 2, "%02x", DataArray[i]);
+				ByteHexDump(buffer + i * 2, DataArray[i]);
+			}
+			transmitUartString(buffer);
 		}
-		transmitUartStringCRLF(buffer);
+		transmitUartStringCRLF("");
 	}
 }
 
@@ -346,19 +345,11 @@ void CreateGenericHIDReport(uint8_t* DataArray)
 		function is called each time the host is ready to accept a new report. DataArray is
 		an array to hold the report to the host.
 	*/
-	uint8_t sm[] = {0x00, 0x03};
-	uint8_t mc[] = {0x00, 0x03, 0x1f, 0x86, 0x1d, 0xd6, 0x03, 0x04}; // '0003' + mac_addr
-	// uint8_t hs[] = {0x81, 0x82};
-	uint8_t bt[] = {0x03};
-	uint8_t di[] = {0x03, 0x48, 0x03, 0x02, 0x04, 0x03, 0xd6, 0x1d, 0x86, 0x1f, 0x03, 0x01}; // '03480302' + mac_addr[::-1] + '0301'
-	uint8_t ni[] = {0x01, 0x00, 0xff, 0x00, 0x03, 0x00, 0x05, 0x01};
-	uint8_t sn[] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
-	uint8_t bc[] = {0xbc, 0x11, 0x42, 0x75, 0xa9, 0x28, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
-	uint8_t ho[] = {0x50, 0xfd, 0x00, 0x00, 0xc6, 0x0f, 0x0f, 0x30, 0x61, 0x96, 0x30, 0xf3, 0xd4, 0x14, 0x54, 0x41, 0x15, 0x54, 0xc7, 0x79, 0x9c, 0x33, 0x36, 0x63};
-	uint8_t d2[] = {0x0f, 0x30, 0x61, 0x96, 0x30, 0xf3, 0xd4, 0x14, 0x54, 0x41, 0x15, 0x54, 0xc7, 0x79, 0x9c, 0x33, 0x36, 0x63};
-	uint8_t c2[] = {0xba, 0x15, 0x62, 0x11, 0xb8, 0x7f, 0x29, 0x06, 0x5b, 0xff, 0xe7, 0x7e, 0x0e, 0x36, 0x56, 0x9e, 0x85, 0x60, 0xff, 0x32, 0x32, 0x32, 0xff, 0xff, 0xff};
-	uint8_t ac[] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xb2, 0xa1};
-	uint8_t ms[] = {0xbe, 0xff, 0x3e, 0x00, 0xf0, 0x01, 0x00, 0x40, 0x00, 0x40, 0x00, 0x40, 0xfe, 0xff, 0xfe, 0xff, 0x08, 0x00, 0xe7, 0x3b, 0xe7, 0x3b, 0xe7, 0x3b};
+	const uint8_t sm[] = {0x00, 0x03};
+	const uint8_t mc[] = {0x00, 0x03, 0x1f, 0x86, 0x1d, 0xd6, 0x03, 0x04}; // '0003' + mac_addr
+	const uint8_t bt[] = {0x03};
+	const uint8_t di[] = {0x03, 0x48, 0x03, 0x02, 0x04, 0x03, 0xd6, 0x1d, 0x86, 0x1f, 0x03, 0x01}; // '03480302' + mac_addr[::-1] + '0301'
+	const uint8_t ni[] = {0x01, 0x00, 0xff, 0x00, 0x03, 0x00, 0x05, 0x01};
 	uint8_t Temp[GENERIC_REPORT_SIZE] = {};
 
 	static uint8_t FirstTime = 0;
@@ -404,28 +395,10 @@ void CreateGenericHIDReport(uint8_t* DataArray)
 		UART_Response(DataArray, 0x83, ResponseUART, Temp, 0);
 		break;
 	case UART_SetNFCIRMCUConfiguration:
-		UART_Response(DataArray, 0xa0, ResponseUART, ni, sizeof(ni));
+		UART_Response(DataArray, 0xA0, ResponseUART, ni, sizeof(ni));
 		break;
-	case SPI_SerialNumber:
-		SPI_Response(DataArray, ResponseSPI, sizeof(ResponseSPI), sn, sizeof(sn));
-		break;
-	case SPI_BodyRGBColor:
-		SPI_Response(DataArray, ResponseSPI, sizeof(ResponseSPI), bc, sizeof(bc));
-		break;
-	case SPI_6AxisHorizontalOffsets:
-		SPI_Response(DataArray, ResponseSPI, sizeof(ResponseSPI), ho, sizeof(ho));
-		break;
-	case SPI_FactoryStickDeviceParameters2:
-		SPI_Response(DataArray, ResponseSPI, sizeof(ResponseSPI), d2, sizeof(d2));
-		break;
-	case SPI_FactoryConfigurationCalibration2:
-		SPI_Response(DataArray, ResponseSPI, sizeof(ResponseSPI), c2, sizeof(c2));
-		break;
-	case SPI_UserAnalogSticksCalibration:
-		SPI_Response(DataArray, ResponseSPI, sizeof(ResponseSPI), ac, sizeof(ac));
-		break;
-	case SPI_User6AxisMotionSensorCalibration:
-		SPI_Response(DataArray, ResponseSPI, sizeof(ResponseSPI), ms, sizeof(ms));
+	case SPI_ReadData:
+		SPI_Response(DataArray, ResponseSPI);
 		break;
 	case PadData:
 	// default:
@@ -440,8 +413,6 @@ void CreateGenericHIDReport(uint8_t* DataArray)
 	default:
 		break;
 	}
-	// DataArray[GENERIC_REPORT_SIZE - 1] = 0x34;
-	// DataArray[GENERIC_REPORT_SIZE - 2] = 0x12;
 
 	transmitUartString("<<< ");
 	if(DataArray[0] != 0x00) {
@@ -497,13 +468,11 @@ void HID_Task(void)
 		/* Create Generic Report Data */
 		CreateGenericHIDReport(GenericData);
 
-		// if(ProControllerCommand != NothingToDo) {
-			/* Write Generic Report Data */
-			Endpoint_Write_Stream_LE(&GenericData, sizeof(GenericData), NULL);
+		/* Write Generic Report Data */
+		Endpoint_Write_Stream_LE(&GenericData, sizeof(GenericData), NULL);
 
-			/* Finalize the stream transfer to send the last packet */
-			Endpoint_ClearIN();
-		// }
+		/* Finalize the stream transfer to send the last packet */
+		Endpoint_ClearIN();
 	}
 }
 
