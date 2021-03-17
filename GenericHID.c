@@ -36,7 +36,6 @@
 
 // #include <stdio.h>
 #include "GenericHID.h"
-#include "mega32u4_dualshock2/mega32u4_uart.h"
 
 typedef enum
 {
@@ -156,7 +155,9 @@ int main(void)
 
 	GlobalInterruptEnable();
 
-	transmitUartStringCRLF("Init");
+	#ifdef UARTDEBUG
+		transmitUartStringCRLF("Init");
+	#endif
 
 	for (;;)
 	{
@@ -173,8 +174,10 @@ void SetupHardware(void)
 	/* Disable watchdog if enabled by bootloader/fuses */
 	MCUSR &= ~(1 << WDRF);
 	wdt_disable();
-
-	initUart();
+	#ifdef UARTDEBUG
+		initUart();
+	#endif
+	InitHardware();
 	/* Disable clock division */
 	clock_prescale_set(clock_div_1);
 #elif (ARCH == ARCH_XMEGA)
@@ -214,24 +217,13 @@ void EVENT_USB_Device_Disconnect(void)
  */
 void EVENT_USB_Device_ConfigurationChanged(void)
 {
-	transmitUartString("EVENT_USB_Device_ConfigurationChanged");
 	bool ConfigSuccess = true;
 
 	/* Setup HID Report Endpoints */
 	ConfigSuccess &= Endpoint_ConfigureEndpoint(GENERIC_IN_EPADDR, EP_TYPE_INTERRUPT, GENERIC_EPSIZE, 1);
-	if(ConfigSuccess) {
-		transmitUartString(" Success");
-	} else {
-		transmitUartString(" Failure");
-	}
 	ConfigSuccess &= Endpoint_ConfigureEndpoint(GENERIC_OUT_EPADDR, EP_TYPE_INTERRUPT, GENERIC_EPSIZE, 1);
 
 	/* Indicate endpoint configuration success or failure */
-	if(ConfigSuccess) {
-		transmitUartStringCRLF(" Success");
-	} else {
-		transmitUartStringCRLF(" Failure");
-	}
 }
 
 /** Event handler for the USB_ControlRequest event. This is used to catch and process control requests sent to
@@ -240,11 +232,6 @@ void EVENT_USB_Device_ConfigurationChanged(void)
  */
 void EVENT_USB_Device_ControlRequest(void)
 {
-	transmitUartString("EVENT_USB_Device_ControlRequest ");
-	ByteHexDump(buffer, USB_ControlRequest.bRequest);
-	ByteHexDump(buffer + 2, USB_ControlRequest.bmRequestType);
-	buffer[4] = '\0';
-	transmitUartStringCRLF(buffer);
 	/* Handle HID Class specific requests */
 	switch (USB_ControlRequest.bRequest)
 	{
@@ -321,17 +308,19 @@ void ProcessGenericHIDReport(uint8_t* DataArray)
 			ProControllerCommand = SPI_ReadData;
 		}
 	}
-	if(ProControllerCommand == NothingToDo) {
-		transmitUartString(">>> ");
-		if(DataArray[0] != 0x00) {
-			for(int i = 0; i < GENERIC_REPORT_SIZE; i++) {
-				// sprintf(buffer + i * 2, "%02x", DataArray[i]);
-				ByteHexDump(buffer + i * 2, DataArray[i]);
+	#ifdef UARTDEBUG
+		if(ProControllerCommand == NothingToDo) {
+			transmitUartString(">>> ");
+			if(DataArray[0] != 0x00) {
+				for(int i = 0; i < GENERIC_REPORT_SIZE; i++) {
+					// sprintf(buffer + i * 2, "%02x", DataArray[i]);
+					ByteHexDump(buffer + i * 2, DataArray[i]);
+				}
+				transmitUartString(buffer);
 			}
-			transmitUartString(buffer);
+			transmitUartStringCRLF("");
 		}
-		transmitUartStringCRLF("");
-	}
+	#endif
 }
 
 /** Function to create the next report to send back to the host at the next reporting interval.
@@ -404,25 +393,24 @@ void CreateGenericHIDReport(uint8_t* DataArray)
 	// default:
 		if(JoystickReport) {
 			memcpy(Temp, InitialInput, sizeof(InitialInput));
-			if(GlobalCounter >> 7) {
-				Temp[1] = (1 << 3);
-			}
+			GetControllerInputData(Temp);
 			Response(DataArray, 0x30, GlobalCounter, Temp, sizeof(InitialInput));
 		}
 	break;
 	default:
 		break;
 	}
-
-	transmitUartString("<<< ");
-	if(DataArray[0] != 0x00) {
-		for(int i = 0; i < GENERIC_REPORT_SIZE; i++) {
-			// sprintf(buffer + i * 2, "%02x", DataArray[i]);
-			ByteHexDump(buffer + i * 2, DataArray[i]);
+	#ifdef UARTDEBUG
+		transmitUartString("<<< ");
+		if(DataArray[0] != 0x00) {
+			for(int i = 0; i < GENERIC_REPORT_SIZE; i++) {
+				// sprintf(buffer + i * 2, "%02x", DataArray[i]);
+				ByteHexDump(buffer + i * 2, DataArray[i]);
+			}
+			transmitUartString(buffer);
 		}
-		transmitUartString(buffer);
-	}
-	transmitUartStringCRLF("");
+		transmitUartStringCRLF("");
+	#endif
 }
 
 void HID_Task(void)
@@ -434,7 +422,6 @@ void HID_Task(void)
 	ProControllerCommand = PadData;
 
 	Endpoint_SelectEndpoint(GENERIC_OUT_EPADDR);
-	// if(GlobalCounter == 0) transmitUart('.');
 	/* Check to see if a packet has been sent from the host */
 	if (Endpoint_IsOUTReceived())
 	{

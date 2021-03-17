@@ -44,6 +44,8 @@
 		#include <stdbool.h>
 		#include <string.h>
 
+    #include "ProcessController.h"
+    #include "mega32u4_dualshock2/mega32u4_uart.h"
 		#include "Descriptors.h"
 		#include "Config/AppConfig.h"
 
