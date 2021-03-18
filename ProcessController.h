@@ -2,6 +2,7 @@
 #define _PROCESSCONTROLLER_H_
 
 #include <stdint.h>
+#include <avr/interrupt.h>
 
 #include "mega32u4_dualshock2/mega32u4_uart.h"
 #include "mega32u4_dualshock2/mega32u4_dualshock2.h"
@@ -48,5 +49,6 @@ enum {
 
 void InitHardware(void);
 void GetControllerInputData(uint8_t *);
+uint8_t GetCounter(void);
 
 #endif

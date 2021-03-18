@@ -2,6 +2,7 @@
 
 #define DS2INPUT
 
+volatile uint8_t GlobalCounter = 0;
 uint8_t DeviceID;
 const uint8_t ButtonMap[16][2] =
 {
@@ -23,8 +24,17 @@ const uint8_t ButtonMap[16][2] =
     {ButtonRight,  SWITCH_Y     }
 };
 
+ISR(TIMER0_COMPA_vect)
+{
+    GlobalCounter++;
+}
+
 void InitHardware(void)
 {
+    TCCR0A = _BV(WGM01); // CTC
+    TCCR0B = _BV(CS02); // Prescale 1/256
+    OCR0A = 62; // 1ms (1/16MHz * 256 * 62 ~ 1ms)
+    TIMSK0 = _BV(OCIE0A); // Compare match A interrupt enable
     #ifdef UARTINPUT
         initUart();
     #elif defined DS2INPUT
@@ -80,7 +90,6 @@ void GetControllerInputData(uint8_t *Data)
     #elif defined DS2INPUT
         uint8_t Buffer[MAX_NUM_RECIEVE];
         uint16_t BuffButton = 0x0000;
-        // uint8_t BuffJoystick[2] = {0x80, 0x80};
         if(DeviceID == 0xF3) {
             readDataAndVibrateEXDS2(Buffer, VIBRATE_SMALL_DISABLE, VIBRATE_BIG_DISABLE);
             BuffButton = easyDechatter(~(Buffer[3] | (Buffer[4] << 8)));
@@ -103,4 +112,9 @@ void GetControllerInputData(uint8_t *Data)
             ;
         }
     #endif
+}
+
+uint8_t GetCounter(void)
+{
+    return GlobalCounter;
 }

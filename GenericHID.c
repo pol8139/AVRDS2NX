@@ -34,8 +34,9 @@
  *  is responsible for the initial application hardware configuration.
  */
 
-// #include <stdio.h>
 #include "GenericHID.h"
+
+// #define UARTDEBUG
 
 typedef enum
 {
@@ -59,8 +60,7 @@ uint8_t ResponseUART;
 uint8_t ResponseSPI[5];
 bool JoystickReport = false;
 // uint8_t MACAddr[] = {0x00, 0x00, 0x5e, 0x00, 0x53, 0x5e};
-const uint8_t InitialInput[] = {0x81, 0x00, 0x80, 0x00, 0xf8, 0xd7, 0x7a, 0x22, 0xc8, 0x7b, 0x00};
-uint8_t GlobalCounter = 0;
+const uint8_t InitialInput[] = {0x81, 0x00, 0x80, 0x00, 0x00, 0x08, 0x80, 0x00, 0x08, 0x80, 0x00};
 #define BUFFERSIZE GENERIC_REPORT_SIZE * 2
 char buffer[BUFFERSIZE + 1]; // \0
 
@@ -114,7 +114,7 @@ void UART_Response(uint8_t* DataArray, uint8_t Code, uint8_t Subcmd, const uint8
 		}
 		Buff[i + sizeof(InitialInput) + 2] = Data[i];
 	}
-	Response(DataArray, 0x21, GlobalCounter, Buff, sizeof(Buff));
+	Response(DataArray, 0x21, GetCounter(), Buff, sizeof(Buff));
 }
 
 void SPI_Response(uint8_t* DataArray, uint8_t* Addr)
@@ -142,13 +142,23 @@ int main(void)
 
 	#ifdef UARTDEBUG
 		transmitUartStringCRLF("Init");
+		// ByteHexDump(buffer, TCCR0A);
+		// buffer[2] = ' ';
+		// ByteHexDump(buffer + 3, TCCR0B);
+		// buffer[5] = ' ';
+		// ByteHexDump(buffer + 6, OCR0A);
+		// buffer[8] = ' ';
+		// ByteHexDump(buffer + 9, OCR0B);
+		// buffer[11] = ' ';
+		// ByteHexDump(buffer + 12, TIMSK0);
+		// buffer[14] = '\0';
+		// transmitUartStringCRLF(buffer);
 	#endif
 
 	for (;;)
 	{
 		HID_Task();
 		USB_USBTask();
-		// GlobalCounter += 8;
 	}
 }
 
@@ -294,17 +304,16 @@ void ProcessGenericHIDReport(uint8_t* DataArray)
 		}
 	}
 	#ifdef UARTDEBUG
-		if(ProControllerCommand == NothingToDo) {
+		// if(ProControllerCommand == NothingToDo) {
 			transmitUartString(">>> ");
 			if(DataArray[0] != 0x00) {
 				for(int i = 0; i < GENERIC_REPORT_SIZE; i++) {
-					// sprintf(buffer + i * 2, "%02x", DataArray[i]);
 					ByteHexDump(buffer + i * 2, DataArray[i]);
 				}
 				transmitUartString(buffer);
 			}
 			transmitUartStringCRLF("");
-		}
+		// }
 	#endif
 }
 
@@ -334,8 +343,6 @@ void CreateGenericHIDReport(uint8_t* DataArray)
 		FirstTime = 2;
 		ProControllerCommand = SecondMagicPacket;
 	}
-
-	GlobalCounter += 8;
 
 	switch(ProControllerCommand)
 	{
@@ -379,9 +386,9 @@ void CreateGenericHIDReport(uint8_t* DataArray)
 		if(JoystickReport) {
 			memcpy(Temp, InitialInput, sizeof(InitialInput));
 			GetControllerInputData(Temp);
-			Response(DataArray, 0x30, GlobalCounter, Temp, sizeof(InitialInput));
+			Response(DataArray, 0x30, GetCounter(), Temp, sizeof(InitialInput));
 		}
-	break;
+		break;
 	default:
 		break;
 	}
@@ -389,7 +396,6 @@ void CreateGenericHIDReport(uint8_t* DataArray)
 		transmitUartString("<<< ");
 		if(DataArray[0] != 0x00) {
 			for(int i = 0; i < GENERIC_REPORT_SIZE; i++) {
-				// sprintf(buffer + i * 2, "%02x", DataArray[i]);
 				ByteHexDump(buffer + i * 2, DataArray[i]);
 			}
 			transmitUartString(buffer);
@@ -416,10 +422,19 @@ void HID_Task(void)
 		{
 			/* Create a temporary buffer to hold the read in report from the host */
 			uint8_t GenericData[GENERIC_REPORT_SIZE] = {};
-
 			/* Read Generic Report Data */
-			Endpoint_Read_Stream_LE(&GenericData, sizeof(GenericData), NULL);
-
+			#ifdef UARTDEBUG
+				ByteHexDump(buffer, 
+			#endif
+				Endpoint_Read_Stream_LE(&GenericData, sizeof(GenericData), NULL)
+			#ifdef UARTDEBUG
+				)
+			#endif
+				;
+			#ifdef UARTDEBUG
+				buffer[2] = '\0';
+				transmitUartStringCRLF(buffer);
+			#endif
 			/* Process Generic Report Data */
 			ProcessGenericHIDReport(GenericData);
 		}
