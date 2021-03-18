@@ -80,14 +80,25 @@ void GetControllerInputData(uint8_t *Data)
     #elif defined DS2INPUT
         uint8_t Buffer[MAX_NUM_RECIEVE];
         uint16_t BuffButton = 0x0000;
+        // uint8_t BuffJoystick[2] = {0x80, 0x80};
         if(DeviceID == 0xF3) {
             readDataAndVibrateEXDS2(Buffer, VIBRATE_SMALL_DISABLE, VIBRATE_BIG_DISABLE);
             BuffButton = easyDechatter(~(Buffer[3] | (Buffer[4] << 8)));
-            for(int i = 0; i < 16; i++) {
+            for(uint8_t i = 0; i < 16; i++) {
                 if(BuffButton & _BV(i)) {
                     Data[ButtonMap[i][0]] |=  ButtonMap[i][1];
                 }
             }
+            Buffer[8] ^= 0xFF;
+            easyDeadZone8(Buffer + 7);
+            Data[Analog0] = Buffer[7] << 4;
+            Data[Analog1] = Buffer[7] >> 4;
+            Data[Analog2] = Buffer[8];
+            Buffer[6] ^= 0xFF;
+            easyDeadZone8(Buffer + 5);
+            Data[Analog3] = Buffer[5] << 4;
+            Data[Analog4] = Buffer[5] >> 4;
+            Data[Analog5] = Buffer[6];
         } else {
             ;
         }
