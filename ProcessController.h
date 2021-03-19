@@ -2,12 +2,16 @@
 #define _PROCESSCONTROLLER_H_
 
 #include <stdint.h>
+#include <stdlib.h>
 #include <avr/interrupt.h>
 
 #include "mega32u4_dualshock2/mega32u4_uart.h"
 #include "mega32u4_dualshock2/mega32u4_dualshock2.h"
 
+#define DS2_SELECT 0x01
+
 enum {
+    SWITCH_ZERO    = 0x00,
     SWITCH_Y       = 0x01,
     SWITCH_X       = 0x02,
     SWITCH_B       = 0x04,
@@ -48,7 +52,9 @@ enum {
 };
 
 void InitHardware(void);
+void NormalizeRumble(uint8_t *);
 void GetControllerInputData(uint8_t *);
 uint8_t GetCounter(void);
+void PrintRumble(void);
 
 #endif

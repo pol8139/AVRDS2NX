@@ -37,6 +37,7 @@
 #include "GenericHID.h"
 
 // #define UARTDEBUG
+// #define UARTDEBUG_RUMBLE
 
 typedef enum
 {
@@ -52,7 +53,8 @@ typedef enum
 	UART_TriggerButtonsElapsedTime,
 	UART_SetNFCIRMCUConfiguration,
 	SPI_ReadData,
-	PadData
+	PadData,
+	RumbleOnly
 } CommandDescription_t;
 
 CommandDescription_t ProControllerCommand;
@@ -140,19 +142,8 @@ int main(void)
 
 	GlobalInterruptEnable();
 
-	#ifdef UARTDEBUG
+	#if defined UARTDEBUG || defined UARTDEBUG_RUMBLE
 		transmitUartStringCRLF("Init");
-		// ByteHexDump(buffer, TCCR0A);
-		// buffer[2] = ' ';
-		// ByteHexDump(buffer + 3, TCCR0B);
-		// buffer[5] = ' ';
-		// ByteHexDump(buffer + 6, OCR0A);
-		// buffer[8] = ' ';
-		// ByteHexDump(buffer + 9, OCR0B);
-		// buffer[11] = ' ';
-		// ByteHexDump(buffer + 12, TIMSK0);
-		// buffer[14] = '\0';
-		// transmitUartStringCRLF(buffer);
 	#endif
 
 	for (;;)
@@ -169,7 +160,7 @@ void SetupHardware(void)
 	/* Disable watchdog if enabled by bootloader/fuses */
 	MCUSR &= ~(1 << WDRF);
 	wdt_disable();
-	#ifdef UARTDEBUG
+	#if defined UARTDEBUG || defined UARTDEBUG_RUMBLE
 		initUart();
 	#endif
 	InitHardware();
@@ -287,6 +278,10 @@ void ProcessGenericHIDReport(uint8_t* DataArray)
 		ResponseUART = DataArray[10];
 		if(DataArray[10] == 0x00) {
 			ProControllerCommand = PadData;
+			NormalizeRumble(DataArray + 2);
+			#if defined UARTDEBUG_RUMBLE
+				PrintRumble();
+			#endif
 		} else if(DataArray[10] == 0x01) {
 			ProControllerCommand = UART_BluetoothManualPairing;
 		} else if(DataArray[10] == 0x02) {
@@ -302,10 +297,19 @@ void ProcessGenericHIDReport(uint8_t* DataArray)
 			memcpy(ResponseSPI, DataArray + 11, sizeof(ResponseSPI));
 			ProControllerCommand = SPI_ReadData;
 		}
+	} else if(DataArray[0] == 0x10) {
+		ProControllerCommand = RumbleOnly;
+		NormalizeRumble(DataArray + 2);
+		#if defined UARTDEBUG_RUMBLE
+			PrintRumble();
+		#endif
 	}
 	#ifdef UARTDEBUG
-		// if(ProControllerCommand == NothingToDo) {
+		if(ProControllerCommand == NothingToDo) {
+			transmitUartString("!!> ");
+		} else {
 			transmitUartString(">>> ");
+		}
 			if(DataArray[0] != 0x00) {
 				for(int i = 0; i < GENERIC_REPORT_SIZE; i++) {
 					ByteHexDump(buffer + i * 2, DataArray[i]);
@@ -313,7 +317,6 @@ void ProcessGenericHIDReport(uint8_t* DataArray)
 				transmitUartString(buffer);
 			}
 			transmitUartStringCRLF("");
-		// }
 	#endif
 }
 
@@ -388,6 +391,8 @@ void CreateGenericHIDReport(uint8_t* DataArray)
 			GetControllerInputData(Temp);
 			Response(DataArray, 0x30, GetCounter(), Temp, sizeof(InitialInput));
 		}
+		break;
+	case RumbleOnly:
 		break;
 	default:
 		break;

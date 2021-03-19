@@ -1,28 +1,53 @@
 #include "ProcessController.h"
 
+// #define UARTINPUT
 #define DS2INPUT
 
 volatile uint8_t GlobalCounter = 0;
+uint8_t HDRumbleLowAmp, HDRumbleHighAmp;
+// uint8_t HDRumbleLowFreq, HDRumbleHighFreq;
+
+#ifdef DS2INPUT
 uint8_t DeviceID;
-const uint8_t ButtonMap[16][2] =
+const uint8_t ButtonMap[2][16][2] =
 {
-    {ButtonMiddle, SWITCH_MINUS },
-    {ButtonMiddle, SWITCH_LSTICK},
-    {ButtonMiddle, SWITCH_RSTICK},
-    {ButtonMiddle, SWITCH_PLUS  },
-    {ButtonLeft,   SWITCH_UP    },
-    {ButtonLeft,   SWITCH_RIGHT },
-    {ButtonLeft,   SWITCH_DOWN  },
-    {ButtonLeft,   SWITCH_LEFT  },
-    {ButtonLeft,   SWITCH_ZL    },
-    {ButtonRight,  SWITCH_ZR    },
-    {ButtonLeft,   SWITCH_L     },
-    {ButtonRight,  SWITCH_R     },
-    {ButtonRight,  SWITCH_X     },
-    {ButtonRight,  SWITCH_A     },
-    {ButtonRight,  SWITCH_B     },
-    {ButtonRight,  SWITCH_Y     }
+    {
+        {ButtonMiddle, SWITCH_ZERO   },
+        {ButtonMiddle, SWITCH_LSTICK },
+        {ButtonMiddle, SWITCH_RSTICK },
+        {ButtonMiddle, SWITCH_PLUS   },
+        {ButtonLeft,   SWITCH_UP     },
+        {ButtonLeft,   SWITCH_RIGHT  },
+        {ButtonLeft,   SWITCH_DOWN   },
+        {ButtonLeft,   SWITCH_LEFT   },
+        {ButtonLeft,   SWITCH_ZL     },
+        {ButtonRight,  SWITCH_ZR     },
+        {ButtonLeft,   SWITCH_L      },
+        {ButtonRight,  SWITCH_R      },
+        {ButtonRight,  SWITCH_X      },
+        {ButtonRight,  SWITCH_A      },
+        {ButtonRight,  SWITCH_B      },
+        {ButtonRight,  SWITCH_Y      }
+    }, {
+        {ButtonMiddle, SWITCH_ZERO   },
+        {ButtonMiddle, SWITCH_LSTICK },
+        {ButtonMiddle, SWITCH_RSTICK },
+        {ButtonMiddle, SWITCH_PLUS   },
+        {ButtonLeft,   SWITCH_UP     },
+        {ButtonLeft,   SWITCH_RIGHT  },
+        {ButtonLeft,   SWITCH_DOWN   },
+        {ButtonLeft,   SWITCH_LEFT   },
+        {ButtonMiddle, SWITCH_CAPTURE},
+        {ButtonMiddle, SWITCH_HOME   },
+        {ButtonMiddle, SWITCH_MINUS  },
+        {ButtonMiddle, SWITCH_PLUS   },
+        {ButtonRight,  SWITCH_X      },
+        {ButtonRight,  SWITCH_A      },
+        {ButtonRight,  SWITCH_B      },
+        {ButtonRight,  SWITCH_Y      }
+    }
 };
+#endif
 
 ISR(TIMER0_COMPA_vect)
 {
@@ -58,6 +83,14 @@ void InitHardware(void)
     #endif
 }
 
+void NormalizeRumble(uint8_t *RawRumbeData)
+{
+    HDRumbleHighAmp = (RawRumbeData[1] >> 1) + (RawRumbeData[5] >> 1);
+    HDRumbleHighAmp += HDRumbleHighAmp >> 2;
+    HDRumbleLowAmp = (RawRumbeData[2] >> 7) + ((RawRumbeData[3] - 0x40) << 1) + (RawRumbeData[6] >> 7) + ((RawRumbeData[7] - 0x40) << 1);
+    HDRumbleLowAmp += HDRumbleLowAmp >> 2;
+}
+
 void GetControllerInputData(uint8_t *Data)
 {
     #ifdef UARTINPUT
@@ -87,15 +120,26 @@ void GetControllerInputData(uint8_t *Data)
                 break;
             default:
                 break;
+        }
     #elif defined DS2INPUT
         uint8_t Buffer[MAX_NUM_RECIEVE];
         uint16_t BuffButton = 0x0000;
+        uint8_t SelectPlessed;
         if(DeviceID == 0xF3) {
-            readDataAndVibrateEXDS2(Buffer, VIBRATE_SMALL_DISABLE, VIBRATE_BIG_DISABLE);
+            if(HDRumbleHighAmp > GlobalCounter) {
+                readDataAndVibrateEXDS2(Buffer, VIBRATE_SMALL_ENABLE, HDRumbleLowAmp);
+            } else {
+                readDataAndVibrateEXDS2(Buffer, VIBRATE_SMALL_DISABLE, HDRumbleLowAmp);
+            }
             BuffButton = easyDechatter(~(Buffer[3] | (Buffer[4] << 8)));
+            if(BuffButton & DS2_SELECT) {
+                SelectPlessed = 1;
+            } else {
+                SelectPlessed = 0;
+            }
             for(uint8_t i = 0; i < 16; i++) {
                 if(BuffButton & _BV(i)) {
-                    Data[ButtonMap[i][0]] |=  ButtonMap[i][1];
+                    Data[ButtonMap[SelectPlessed][i][0]] |=  ButtonMap[SelectPlessed][i][1];
                 }
             }
             Buffer[8] ^= 0xFF;
@@ -117,4 +161,16 @@ void GetControllerInputData(uint8_t *Data)
 uint8_t GetCounter(void)
 {
     return GlobalCounter;
+}
+
+void PrintRumble(void)
+{
+    char s[4] = {};
+    // ByteHexDump(s, HDRumbleLowAmp);
+    itoa(HDRumbleLowAmp, s, 10);
+    transmitUartString(s);
+    transmitUart('\t');
+    // ByteHexDump(s + 3, HDRumbleHighAmp);
+    itoa(HDRumbleHighAmp, s, 10);
+    transmitUartStringCRLF(s);
 }
