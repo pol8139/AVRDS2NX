@@ -2,6 +2,8 @@
 
 // #define UARTINPUT
 #define DS2INPUT
+#define ONLYSMALLVIBRATOR
+// #define UARTDEBUG_TIMING
 
 volatile uint8_t GlobalCounter = 0;
 uint8_t HDRumbleLowAmp, HDRumbleHighAmp;
@@ -52,6 +54,9 @@ const uint8_t ButtonMap[2][16][2] =
 ISR(TIMER0_COMPA_vect)
 {
     GlobalCounter++;
+    #if defined UARTDEBUG_TIMING
+        transmitUart('.');
+    #endif
 }
 
 void InitHardware(void)
@@ -60,9 +65,10 @@ void InitHardware(void)
     TCCR0B = _BV(CS02); // Prescale 1/256
     OCR0A = 62; // 1ms (1/16MHz * 256 * 62 ~ 1ms)
     TIMSK0 = _BV(OCIE0A); // Compare match A interrupt enable
-    #ifdef UARTINPUT
+    #if defined UARTINPUT || defined UARTDEBUG_TIMING
         initUart();
-    #elif defined DS2INPUT
+    #endif
+    #if defined DS2INPUT
         uint8_t Buffer[MAX_NUM_RECIEVE];
         initSPIMaster();
         readDataDS2(Buffer);
@@ -126,6 +132,15 @@ void GetControllerInputData(uint8_t *Data)
         uint16_t BuffButton = 0x0000;
         uint8_t SelectPlessed;
         if(DeviceID == 0xF3) {
+            #if defined ONLYSMALLVIBRATOR
+                HDRumbleHighAmp = (HDRumbleHighAmp >> 1) + (HDRumbleLowAmp >> 1);
+                if(HDRumbleHighAmp & 0x80) {
+                    HDRumbleHighAmp = 0xFF;
+                } else {
+                    HDRumbleHighAmp <<= 1;
+                }
+                HDRumbleLowAmp = VIBRATE_BIG_DISABLE;
+            #endif
             if(HDRumbleHighAmp > GlobalCounter) {
                 readDataAndVibrateEXDS2(Buffer, VIBRATE_SMALL_ENABLE, HDRumbleLowAmp);
             } else {
