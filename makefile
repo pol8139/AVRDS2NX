@@ -23,7 +23,7 @@ F_USB        = $(F_CPU)
 OPTIMIZATION = s
 TARGET       = GenericHID
 SRC          = $(TARGET).c Descriptors.c ProcessController.c mega32u4_dualshock2/mega32u4_dualshock2.c mega32u4_dualshock2/mega32u4_uart.c $(LUFA_SRC_USB)
-LUFA_PATH    = ../lufa/LUFA
+LUFA_PATH    = ./lufa/LUFA
 CC_FLAGS     = -DUSE_LUFA_CONFIG_HEADER -DUSB_STREAM_TIMEOUT_MS=8 -IConfig/
 LD_FLAGS     =
 
