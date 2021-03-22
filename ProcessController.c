@@ -2,7 +2,8 @@
 
 // #define UARTINPUT
 #define DS2INPUT
-#define ONLYSMALLVIBRATOR
+// #define ONLYSMALLVIBRATOR
+#define INCREASERUMBLE
 // #define UARTDEBUG_TIMING
 
 volatile uint8_t GlobalCounter = 0;
@@ -141,11 +142,19 @@ void GetControllerInputData(uint8_t *Data)
                 }
                 HDRumbleLowAmp = VIBRATE_BIG_DISABLE;
             #endif
-            if(HDRumbleHighAmp > GlobalCounter) {
-                readDataAndVibrateEXDS2(Buffer, VIBRATE_SMALL_ENABLE, HDRumbleLowAmp);
-            } else {
-                readDataAndVibrateEXDS2(Buffer, VIBRATE_SMALL_DISABLE, HDRumbleLowAmp);
-            }
+            #if defined INCREASERUMBLE
+                if(HDRumbleLowAmp & 0x80) {
+                    HDRumbleLowAmp = 0xFF;
+                } else {
+                    HDRumbleLowAmp <<= 1;
+                }
+                if(HDRumbleHighAmp & 0x80) {
+                    HDRumbleHighAmp = 0xFF;
+                } else {
+                    HDRumbleHighAmp <<= 1;
+                }
+            #endif
+            readDataAndVibrateEXDS2(Buffer, DeltaSigmaRumbleStrength(HDRumbleHighAmp), HDRumbleLowAmp);
             BuffButton = easyDechatter(~(Buffer[3] | (Buffer[4] << 8)));
             if(BuffButton & DS2_SELECT) {
                 SelectPlessed = 1;
@@ -173,6 +182,19 @@ void GetControllerInputData(uint8_t *Data)
     #endif
 }
 
+uint8_t DeltaSigmaRumbleStrength(uint8_t AnalogInput)
+{
+    static int16_t Integral = 0;
+    static uint8_t OneBitOut = 0;
+    Integral += AnalogInput - OneBitOut * 256;
+    if(Integral > 0) {
+        OneBitOut = 1;
+    } else {
+        OneBitOut = 0;
+    }
+    return OneBitOut;
+}
+
 uint8_t GetCounter(void)
 {
     return GlobalCounter;
@@ -180,12 +202,14 @@ uint8_t GetCounter(void)
 
 void PrintRumble(void)
 {
-    char s[4] = {};
-    // ByteHexDump(s, HDRumbleLowAmp);
-    itoa(HDRumbleLowAmp, s, 10);
-    transmitUartString(s);
-    transmitUart('\t');
-    // ByteHexDump(s + 3, HDRumbleHighAmp);
-    itoa(HDRumbleHighAmp, s, 10);
-    transmitUartStringCRLF(s);
+    if(HDRumbleHighAmp != 0 && HDRumbleLowAmp != 0) {
+        char s[4] = {};
+        // ByteHexDump(s, HDRumbleLowAmp);
+        itoa(HDRumbleLowAmp, s, 10);
+        transmitUartString(s);
+        transmitUart('\t');
+        // ByteHexDump(s + 3, HDRumbleHighAmp);
+        itoa(HDRumbleHighAmp, s, 10);
+        transmitUartStringCRLF(s);
+    }
 }

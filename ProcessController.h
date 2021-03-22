@@ -54,6 +54,7 @@ enum {
 void InitHardware(void);
 void NormalizeRumble(uint8_t *);
 void GetControllerInputData(uint8_t *);
+uint8_t DeltaSigmaRumbleStrength(uint8_t);
 uint8_t GetCounter(void);
 void PrintRumble(void);
 

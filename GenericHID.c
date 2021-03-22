@@ -310,13 +310,13 @@ void ProcessGenericHIDReport(uint8_t* DataArray)
 		} else {
 			transmitUartString(">>> ");
 		}
-			if(DataArray[0] != 0x00) {
-				for(int i = 0; i < GENERIC_REPORT_SIZE; i++) {
-					ByteHexDump(buffer + i * 2, DataArray[i]);
-				}
-				transmitUartString(buffer);
+		if(DataArray[0] != 0x00) {
+			for(int i = 0; i < GENERIC_REPORT_SIZE; i++) {
+				ByteHexDump(buffer + i * 2, DataArray[i]);
 			}
-			transmitUartStringCRLF("");
+			transmitUartString(buffer);
+		}
+		transmitUartStringCRLF("");
 	#endif
 }
 
