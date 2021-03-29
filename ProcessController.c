@@ -2,6 +2,7 @@
 
 // #define UARTINPUT
 #define DS2INPUT
+// #define DDRMAT
 // #define ONLYSMALLVIBRATOR
 #define INCREASERUMBLE
 // #define UARTDEBUG_TIMING
@@ -12,7 +13,7 @@ uint8_t HDRumbleLowAmp, HDRumbleHighAmp;
 
 #ifdef DS2INPUT
 uint8_t DeviceID;
-const uint8_t ButtonMap[2][16][2] =
+const uint8_t ButtonMap[3][16][2] =
 {
     {
         {ButtonMiddle, SWITCH_ZERO   },
@@ -48,6 +49,23 @@ const uint8_t ButtonMap[2][16][2] =
         {ButtonRight,  SWITCH_A      },
         {ButtonRight,  SWITCH_B      },
         {ButtonRight,  SWITCH_Y      }
+    }, {
+        {ButtonMiddle, SWITCH_MINUS  },
+        {ButtonMiddle, SWITCH_ZERO   },
+        {ButtonMiddle, SWITCH_ZERO   },
+        {ButtonMiddle, SWITCH_PLUS   },
+        {ButtonLeft,   SWITCH_UP     },
+        {ButtonLeft,   SWITCH_RIGHT  },
+        {ButtonLeft,   SWITCH_DOWN   },
+        {ButtonLeft,   SWITCH_LEFT   },
+        {ButtonMiddle, SWITCH_ZERO   },
+        {ButtonMiddle, SWITCH_ZERO   },
+        {ButtonMiddle, SWITCH_ZERO   },
+        {ButtonMiddle, SWITCH_ZERO   },
+        {ButtonMiddle, SWITCH_ZERO   },
+        {ButtonRight,  SWITCH_A      },
+        {ButtonRight,  SWITCH_B      },
+        {ButtonMiddle, SWITCH_ZERO   }
     }
 };
 #endif
@@ -131,7 +149,8 @@ void GetControllerInputData(uint8_t *Data)
     #elif defined DS2INPUT
         uint8_t Buffer[MAX_NUM_RECIEVE];
         uint16_t BuffButton = 0x0000;
-        uint8_t SelectPlessed;
+        uint8_t ButtonMappingMode = 0;
+        uint8_t SizeofData;
         if(DeviceID == 0xF3) {
             #if defined ONLYSMALLVIBRATOR
                 HDRumbleHighAmp = (HDRumbleHighAmp >> 1) + (HDRumbleLowAmp >> 1);
@@ -142,30 +161,40 @@ void GetControllerInputData(uint8_t *Data)
                 }
                 HDRumbleLowAmp = VIBRATE_BIG_DISABLE;
             #endif
-            #if defined INCREASERUMBLE
-                if(HDRumbleLowAmp & 0x80) {
-                    HDRumbleLowAmp = 0xFF;
-                } else {
-                    HDRumbleLowAmp <<= 1;
-                }
-                if(HDRumbleHighAmp & 0x80) {
-                    HDRumbleHighAmp = 0xFF;
-                } else {
-                    HDRumbleHighAmp <<= 1;
-                }
-            #endif
-            readDataAndVibrateEXDS2(Buffer, DeltaSigmaRumbleStrength(HDRumbleHighAmp), HDRumbleLowAmp);
-            BuffButton = easyDechatter(~(Buffer[3] | (Buffer[4] << 8)));
-            if(BuffButton & DS2_SELECT) {
-                SelectPlessed = 1;
+        }
+        #if defined INCREASERUMBLE
+            if(HDRumbleLowAmp & 0x80) {
+                HDRumbleLowAmp = 0xFF;
             } else {
-                SelectPlessed = 0;
+                HDRumbleLowAmp <<= 1;
             }
-            for(uint8_t i = 0; i < 16; i++) {
-                if(BuffButton & _BV(i)) {
-                    Data[ButtonMap[SelectPlessed][i][0]] |=  ButtonMap[SelectPlessed][i][1];
-                }
+            if(HDRumbleHighAmp & 0x80) {
+                HDRumbleHighAmp = 0xFF;
+            } else {
+                HDRumbleHighAmp <<= 1;
             }
+        #endif
+        if(DeviceID == 0xF3) {
+            SizeofData = readDataAndVibrateEXDS2(Buffer, DeltaSigmaRumbleStrength(HDRumbleHighAmp), HDRumbleLowAmp);
+        } else {
+            SizeofData = readDataAndVibrateDS2(Buffer, DeltaSigmaRumbleStrength(HDRumbleHighAmp));
+        }
+        BuffButton = easyDechatter(~(Buffer[3] | (Buffer[4] << 8)));
+        #ifdef DDRMAT
+            ButtonMappingMode = 2;
+        #else
+            if(BuffButton & DS2_SELECT) {
+                ButtonMappingMode = 1;
+            } else {
+                ButtonMappingMode = 0;
+            }
+        #endif
+        for(uint8_t i = 0; i < 16; i++) {
+            if(BuffButton & _BV(i)) {
+                Data[ButtonMap[ButtonMappingMode][i][0]] |=  ButtonMap[ButtonMappingMode][i][1];
+            }
+        }
+        if(SizeofData > 8) {
             Buffer[8] ^= 0xFF;
             easyDeadZone8(Buffer + 7);
             Data[Analog0] = Buffer[7] << 4;
@@ -177,7 +206,12 @@ void GetControllerInputData(uint8_t *Data)
             Data[Analog4] = Buffer[5] >> 4;
             Data[Analog5] = Buffer[6];
         } else {
-            ;
+            Data[Analog0] = 0x00;
+            Data[Analog1] = 0x08;
+            Data[Analog2] = 0x80;
+            Data[Analog3] = 0x00;
+            Data[Analog4] = 0x08;
+            Data[Analog5] = 0x80;
         }
     #endif
 }
